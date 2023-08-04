@@ -1,43 +1,40 @@
 import XCTest
+import AnyAsyncSequence
 
 @testable import swift_async_state_machine
 
-enum E {
+enum Events {
   case tick
   case change
 }
 
 enum TestState {
-  case printingRandomNumbers
-  case idle
+  case foreground
+  case background
 }
 
 extension TestState: State {
-
   typealias Output = Int
-  typealias Events = AnyAsyncSequence<() -> E> // TODO: why we have () -> E instead of E here?
 
-  func receive_events(_ events: AnyAsyncSequence<() -> E>) -> AnyAsyncSequence<
-    Either<Output, Self?>
-  > {
+  func receive_events(_ events: AnyAsyncSequence<Events>) -> AnyAsyncSequence<(Output?, Self?)> {
     print("receive_events")
     switch self {
-    case .printingRandomNumbers:
+    case .foreground:
       return events.map {
-        switch $0() {
+        switch $0 {
         case .tick:
-          return Either.left(Int.random(in: 0...99))
+          return (Int.random(in: 0...99), nil)
         case .change:
-          return Either.right(.idle)
+          return (nil, .background)
         }
       }.eraseToAnyAsyncSequence()
-    case .idle:
-      return events.compactMap {
-        switch $0() {
+    case .background:
+      return events.throttle(for: .seconds(1)).map {
+        switch $0 {
         case .tick:
-          return nil
+          return (Int.random(in: 0...99), nil)
         case .change:
-          return Either.right(.printingRandomNumbers)
+          return (nil, .foreground)
         }
       }.eraseToAnyAsyncSequence()
     }
@@ -46,23 +43,19 @@ extension TestState: State {
 
 final class swift_async_state_machineTests: XCTestCase {
   func testExample() async throws {
-    let initial_state = TestState.idle
+    let initial_state = TestState.background
     let events = [
-      {
-        print("first event")
-        return E.tick
-      },
-      { .tick },
-      { .tick },
-      { .change },
-      { .tick },
-      { .tick },
-      { .tick },
-      { .change },
-      { 
-        print("last event")
-        return E.tick },
-    ].asyncNotLazy
+        Events.tick
+      ,
+       .tick ,
+       .tick ,
+       .change ,
+       .tick ,
+       .tick ,
+       .tick ,
+       .change ,
+         .tick ,
+    ].async.throttle(for: .milliseconds(200))
     let outputs = initial_state.drive(events: events.eraseToAnyAsyncSequence())
     for try await o in outputs {  //WHy this can throw?
       print(o)

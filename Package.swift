@@ -24,7 +24,7 @@ let package = Package(
             name: "swift_async_state_machine",
             dependencies: [
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
-                .product(name: "AnyAsyncSequence", package: "AnyAsyncSequence")
+                .product(name: "AnyAsyncSequence", package: "AnyAsyncSequence"),
             ]),
         .testTarget(
             name: "swift_async_state_machineTests",
