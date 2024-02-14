@@ -1,5 +1,7 @@
-import XCTest
 import AnyAsyncSequence
+import AsyncAlgorithms
+import XCTest
+
 
 @testable import swift_async_state_machine
 
@@ -29,10 +31,10 @@ extension TestState: State {
         }
       }.eraseToAnyAsyncSequence()
     case .background:
-      return events.throttle(for: .seconds(1)).map {
+      return events.chunked(by: AsyncTimerSequence.repeating(every: .seconds(3))).flatMap {$0.async}.map {
         switch $0 {
         case .tick:
-          return (Int.random(in: 0...99), nil)
+          return (Int.random(in: -99...0), nil)
         case .change:
           return (nil, .foreground)
         }
@@ -41,33 +43,39 @@ extension TestState: State {
   }
 }
 
+
 final class swift_async_state_machineTests: XCTestCase {
+
   func testExample() async throws {
-    let initial_state = TestState.background
-    let events = [
-        Events.tick
-      ,
-       .tick ,
-       .tick ,
-       .change ,
-       .tick ,
-       .tick ,
-       .tick ,
-       .change ,
-         .tick ,
-    ].async.throttle(for: .milliseconds(200))
-    let outputs = initial_state.drive(events: events.eraseToAnyAsyncSequence())
-    for try await o in outputs {  //WHy this can throw?
-      print(o)
-    }
+      let initial_state = TestState.background
+      var events = [
+          Events.tick,
+          .tick,
+          .tick,
+          .tick,
+          .tick,
+          .tick,
+          .tick,
+          .tick,
+          .change
+      ]
+
+      let t = AsyncTimerSequence(interval: .seconds(0.1), clock: .continuous)
+        .prefix(events.count)
+        .map { events.popLast() }
+        .eraseToAnyAsyncSequence()
+
+      let outputs = initial_state.drive(events: t)
+      for try await o in outputs {  //WHy this can throw?
+         print("\(Date()): \(o)")
+      }
   }
 }
 
+// a state is a function s:
 
 
-// a state is a function s: 
 // m a -> m (b, StateMachineT m a b)
 // a -> m (b, StateMachineT m a b)
-
 
 // flatMap :: m a -> (a -> m b) -> m b
